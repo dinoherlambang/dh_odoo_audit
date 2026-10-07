@@ -1,0 +1,84 @@
+# ==============================================================================
+# DH Odoo Performance & Code Audit Engine (dh_odoo_audit)
+# Configuration Template (Zero-Production-Impact: Safe Defaults)
+# ==============================================================================
+
+global_settings:
+  project_name: "Odoo Production Audit"
+  odoo_version: "13.0"
+  odoo_custom_addons_path: "./sample_addons"
+  odoo_conf_path: "./sample_configs/odoo.conf"
+  nginx_conf_path: "./sample_configs/nginx.conf"
+  postgres_conf_path: "./sample_configs/postgresql.conf"
+  postgres_log_path: "./sample_configs/postgresql.log"
+  odoo_log_path: "./sample_configs/odoo.log"
+  output_format: "all" # Options: markdown, json, ai_prompt, all
+  output_dir: "./audit_reports"
+  ai_prompt_settings:
+    mask_passwords: true
+    include_code_snippets: true
+    target_ai_task: "deep_remediation" # Options: deep_remediation, ansible_script_gen, executive_summary
+
+audit_scopes:
+  # ----------------------------------------------------------------------------
+  # Core Scopes (SAFE BY DEFAULT - Read-Only Local Static Files)
+  # ----------------------------------------------------------------------------
+  system_hardware_and_config:
+    enabled: true
+    check_cpu_workers_ratio: true
+    check_ram_memory_limits: true
+    check_cron_threads_ratio: true
+    check_timeout_limits: true
+    check_pg_memory_and_cost: true
+
+  gateway_and_odoo_alignment:
+    enabled: true
+    verify_proxy_mode_and_headers: true   # Cek proxy_mode vs X-Forwarded-*
+    verify_timeout_symmetry: true         # Cek proxy_read_timeout vs limit_time_real
+    verify_longpolling_split: true        # Cek routing port 8069 vs 8072
+    verify_proxy_buffer_sizes: true       # Cek 128k buffer anti-502
+    verify_upload_body_limit: true        # Cek client_max_body_size (min 25MB)
+    verify_gzip_compression: true         # Cek gzip MIME types
+    verify_static_assets_cache: true      # Cek expires/cache-control /web/static/
+
+  static_code_analysis:
+    enabled: true
+    rules:
+      detect_search_in_loop: true         # N+1 query issue
+      detect_write_in_loop: true          # Unbatched write/create
+      detect_len_search_anti_pattern: true# len(search) vs search_count
+      detect_computed_without_store: true # compute field store status
+      detect_unlimited_search: true       # search([]) without limit
+
+  infrastructure_and_os:
+    enabled: true
+    check_swappiness: true                # Target: 1-10 (mencegah lag swap)
+    check_filestore_bloat: true           # Size audit folder filestore
+    check_disk_free_threshold: true       # Sisa disk partisi filestore (min 15%)
+
+  # ----------------------------------------------------------------------------
+  # Advanced Scopes (DISABLED BY DEFAULT - Opt-In Features)
+  # ----------------------------------------------------------------------------
+  log_stream_analysis:
+    enabled: false
+    max_log_lines_to_scan: 50000
+    slow_query_threshold_ms: 1000
+    detect_deadlocks: true
+    detect_worker_kills: true
+
+  db_metadata_inspection:
+    enabled: false
+    db_name: "production_db"
+    db_user: "postgres"
+    check_missing_indexes: true
+    check_unused_indexes: true
+
+  auto_generator:
+    enabled: false
+    generate_optimized_odoo_conf: true
+    generate_optimized_postgres_conf: true
+
+  integrations:
+    enabled: false
+    telegram_bot_alert: false
+    ci_cd_exit_code: true                 # Exit code > 0 jika ada CRITICAL issues

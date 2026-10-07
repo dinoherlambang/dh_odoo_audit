@@ -1,0 +1,11 @@
+# 📋 Audit Web Gateway & Nginx Reverse Proxy
+## Temuan Sinkronisasi Nginx vs Odoo:
+| Code | Severity | Temuan Masalah | Solusi Revisi |
+| :--- | :---: | :--- | :--- |
+| `GATEWAY-PROXY-MODE-OFF` | **CRITICAL** | **Odoo proxy_mode Bernilai False di Balik Nginx**<br>Odoo berjalan di balik reverse proxy tetapi 'proxy_mode = True' belum diset. Redirect HTTPS akan bermasalah (Mixed Content). | Tambahkan 'proxy_mode = True' di bagian [options] odoo.conf. |
+| `GATEWAY-NGINX-HEADERS-MISSING` | **WARNING** | **Header X-Forwarded-* Kurang Lengkap di Nginx**<br>Nginx belum meneruskan X-Forwarded-Host atau X-Forwarded-Proto $scheme ke Odoo. | Tambahkan 'proxy_set_header X-Forwarded-Host $host;' dan 'proxy_set_header X-Forwarded-Proto $scheme;'. |
+| `GATEWAY-LONGPOLLING-MISSING` | **CRITICAL** | **Rute Longpolling (Port 8072) Belum Terpisah di Nginx**<br>Nginx tidak memisahkan rute /longpolling ke port 8072. Traffic live chat dan bus notification akan membanjiri HTTP worker utama (port 8069). | Konfigurasikan upstream terpisah untuk port 8072 dan buat blok 'location /longpolling { proxy_pass http://odoochat; }'. |
+| `GATEWAY-TIMEOUT-ASYMMETRY` | **WARNING** | **Nginx proxy_read_timeout Lebih Kecil dari limit_time_real Odoo**<br>Nginx timeout (60s) < Odoo timeout (120s). User akan melihat 504 Gateway Timeout saat Odoo masih memproses laporan. | Set 'proxy_read_timeout 300s;' pada konfigurasi Nginx. |
+| `GATEWAY-BUFFERS-TOO-SMALL` | **WARNING** | **Buffer Nginx Belum Disesuaikan untuk Header Odoo**<br>Odoo memiliki cookie sesi yang besar. Buffer default Nginx rawan memicu '502 Bad Gateway: upstream sent too big header'. | Tambahkan 'proxy_buffer_size 128k;' dan 'proxy_buffers 16 64k;'. |
+| `GATEWAY-BODY-SIZE-LOW` | **INFO** | **client_max_body_size Terlalu Kecil**<br>Batas upload 1MB mungkin kurang untuk impor data besar. | >= 50M |
+| `GATEWAY-GZIP-OFF` | **WARNING** | **Gzip Compression Belum Aktif di Nginx**<br>Kompresi gzip menghemat hingga 70% bandwidth web client Odoo untuk file JS dan CSS bundle. | Aktifkan 'gzip on;' dan sertakan mime type text/css application/javascript application/json. |
