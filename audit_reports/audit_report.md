@@ -1,5 +1,5 @@
 # 🛡️ DH Odoo Performance & Code Audit Engine (OPCAE) Report
-**Proyek:** Odoo Production Audit | **Target:** Odoo 13.0 | **Tanggal:** 2026-10-07 20:31:03
+**Proyek:** Odoo Production Audit | **Target:** Odoo 13.0 | **Tanggal:** 2026-10-07 20:42:05
 
 ---
 
@@ -7,7 +7,7 @@
 
 | Health Score | Grade | Status | Total Checks | Critical | Warning | Info | Passed |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **0 / 100** | **Grade D** | 🔴 **CRITICAL RISK** | 18 | 5 | 9 | 4 | 0 |
+| **0 / 100** | **Grade D** | 🔴 **CRITICAL RISK** | 23 | 6 | 12 | 5 | 0 |
 
 ## 2. Server & Database Configuration Audit
 
@@ -30,6 +30,11 @@
 | `GATEWAY-BUFFERS-TOO-SMALL` | 🟡 **WARNING** | **Buffer Nginx Belum Disesuaikan untuk Header Odoo**<br>Odoo memiliki cookie sesi yang besar. Buffer default Nginx rawan memicu '502 Bad Gateway: upstream sent too big header'. | Tambahkan 'proxy_buffer_size 128k;' dan 'proxy_buffers 16 64k;'. |
 | `GATEWAY-BODY-SIZE-LOW` | 🟡 **INFO** | **client_max_body_size Terlalu Kecil**<br>Batas upload 1MB mungkin kurang untuk impor data besar. | >= 50M |
 | `GATEWAY-GZIP-OFF` | 🟡 **WARNING** | **Gzip Compression Belum Aktif di Nginx**<br>Kompresi gzip menghemat hingga 70% bandwidth web client Odoo untuk file JS dan CSS bundle. | Aktifkan 'gzip on;' dan sertakan mime type text/css application/javascript application/json. |
+| `GATEWAY-SEC-DB-MANAGER-EXPOSED` | 🔴 **CRITICAL** | **Database Manager Odoo Terbuka ke Publik**<br>Endpoint /web/database/manager dan selector tidak dilindungi oleh restriksi IP atau deny all. Siapa pun di internet dapat menghapus, menduplikasi, atau mengunduh backup database jika master password lemah. | Tambahkan proteksi IP pada Nginx: 'location /web/database/manager { allow 10.0.0.0/8; deny all; ... }' atau blokir akses eksternal. |
+| `GATEWAY-SEC-LOGIN-BRUTEFORCE` | 🟡 **WARNING** | **Halaman Login (/web/login) Rentan Serangan Brute-Force**<br>Nginx belum menerapkan rate limiting pada endpoint /web/login. Server berisiko terhadap credential stuffing dan serangan brute-force password. | Definisikan 'limit_req_zone $binary_remote_addr zone=odoo_login:10m rate=5r/m;' dan terapkan pada 'location = /web/login'. |
+| `GATEWAY-SEC-HEADERS-MISSING` | 🟡 **WARNING** | **HTTP Security Headers Kurang Lengkap**<br>Nginx belum mengirimkan header X-Frame-Options (anti-clickjacking) atau X-Content-Type-Options (anti-MIME-sniffing). | Tambahkan 'add_header X-Frame-Options SAMEORIGIN;' dan 'add_header X-Content-Type-Options nosniff;'. |
+| `GATEWAY-SEC-SERVER-TOKENS` | 🟡 **WARNING** | **Versi Nginx Terekspos ke Publik (server_tokens on)**<br>Nginx membocorkan nomor versinya pada header HTTP 'Server' dan halaman error default. Hal ini mempermudah penyerang menargetkan CVE spesifik. | Tambahkan 'server_tokens off;' di dalam blok http atau server Nginx. |
+| `GATEWAY-SEC-DOTFILES-OPEN` | 🟡 **INFO** | **Akses File Tersembunyi (.git, .env) Belum Diblokir**<br>Nginx belum secara eksplisit memblokir request ke file atau direktori tersembunyi berawalan titik (seperti .git, .env, .htaccess). | Tambahkan blok: 'location ~ /\. { deny all; access_log off; log_not_found off; }'. |
 
 ## 4. Static Code Analysis (Custom Addons)
 

@@ -33,6 +33,7 @@ audit_scopes:
 
   gateway_and_odoo_alignment:
     enabled: true
+    # Performance & Gateway Alignment
     verify_proxy_mode_and_headers: true   # Cek proxy_mode vs X-Forwarded-*
     verify_timeout_symmetry: true         # Cek proxy_read_timeout vs limit_time_real
     verify_longpolling_split: true        # Cek routing port 8069 vs 8072
@@ -40,6 +41,13 @@ audit_scopes:
     verify_upload_body_limit: true        # Cek client_max_body_size (min 25MB)
     verify_gzip_compression: true         # Cek gzip MIME types
     verify_static_assets_cache: true      # Cek expires/cache-control /web/static/
+    # Nginx Security Hardening (Tambahan)
+    verify_database_manager_protection: true  # Cek proteksi /web/database/manager
+    verify_login_rate_limiting: true          # Cek limit_req pada /web/login
+    verify_security_headers: true             # Cek X-Frame-Options, HSTS, nosniff
+    verify_server_tokens_hidden: true         # Cek server_tokens off
+    verify_dotfiles_denied: true              # Cek deny all untuk file tersembunyi
+
 
   static_code_analysis:
     enabled: true

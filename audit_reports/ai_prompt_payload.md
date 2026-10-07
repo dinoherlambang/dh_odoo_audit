@@ -9,7 +9,7 @@ Tugas Anda adalah menganalisis akar masalah secara komprehensif, memberikan konf
 - **Proyek:** Odoo Production Audit
 - **Target Odoo Version:** 13.0
 - **Audit Health Score:** 0 / 100 (Grade: D - CRITICAL RISK)
-- **Statistik Masalah:** 5 Critical, 9 Warning
+- **Statistik Masalah:** 6 Critical, 12 Warning
 
 ## 2. SERVER & GATEWAY CONFIGURATION MISMATCHES
 - **[CONF-WORKERS-ZERO] Odoo Berjalan dalam Single-Process Mode** (CRITICAL)
@@ -52,6 +52,22 @@ Tugas Anda adalah menganalisis akar masalah secara komprehensif, memberikan konf
   - Nilai saat ini: `Off`
   - Target ideal: `gzip on;`
   - Catatan: Kompresi gzip menghemat hingga 70% bandwidth web client Odoo untuk file JS dan CSS bundle.
+- **[GATEWAY-SEC-DB-MANAGER-EXPOSED] Database Manager Odoo Terbuka ke Publik** (CRITICAL)
+  - Nilai saat ini: `Publicly Exposed`
+  - Target ideal: `Restricted by IP or Denied`
+  - Catatan: Endpoint /web/database/manager dan selector tidak dilindungi oleh restriksi IP atau deny all. Siapa pun di internet dapat menghapus, menduplikasi, atau mengunduh backup database jika master password lemah.
+- **[GATEWAY-SEC-LOGIN-BRUTEFORCE] Halaman Login (/web/login) Rentan Serangan Brute-Force** (WARNING)
+  - Nilai saat ini: `No rate limit`
+  - Target ideal: `limit_req_zone + limit_req active`
+  - Catatan: Nginx belum menerapkan rate limiting pada endpoint /web/login. Server berisiko terhadap credential stuffing dan serangan brute-force password.
+- **[GATEWAY-SEC-HEADERS-MISSING] HTTP Security Headers Kurang Lengkap** (WARNING)
+  - Nilai saat ini: `Missing Security Headers`
+  - Target ideal: `X-Frame-Options & X-Content-Type-Options present`
+  - Catatan: Nginx belum mengirimkan header X-Frame-Options (anti-clickjacking) atau X-Content-Type-Options (anti-MIME-sniffing).
+- **[GATEWAY-SEC-SERVER-TOKENS] Versi Nginx Terekspos ke Publik (server_tokens on)** (WARNING)
+  - Nilai saat ini: `server_tokens on/unset`
+  - Target ideal: `server_tokens off;`
+  - Catatan: Nginx membocorkan nomor versinya pada header HTTP 'Server' dan halaman error default. Hal ini mempermudah penyerang menargetkan CVE spesifik.
 
 ## 3. STATIC CODE (AST) PERFORMANCE ISSUES
 ### [Issue 1: AST-SEARCH-IN-LOOP - N+1 Query: Method .search() di dalam Loop for]

@@ -30,6 +30,7 @@ Didesain khusus dengan prinsip **Zero-Production-Impact**, alat ini memindai fil
 * 🛡️ **Zero-Production-Impact (Safe by Default):** Murni membaca file teks lokal (`.conf`, `.py`, dan log bertahap).
 * ⚙️ **Kalkulasi Hardware Otomatis:** Mengkalkulasi formula `workers = (CPU * 2) + 1` dan alokasi batas memori soft/hard berdasarkan resource CPU/RAM aktual.
 * 🌐 **Web Gateway & Nginx Cross-Validation:** Memverifikasi keselarasan reverse proxy Nginx terhadap Odoo (`proxy_mode`, rute pemisahan port longpolling `8072`, buffer 128k, dan timeout simetris).
+* 🔒 **Nginx Security Hardening Audit:** Memeriksa proteksi endpoint sensitif `/web/database/manager`, rate limiting anti-brute-force `/web/login`, HTTP security headers (anti-clickjacking & nosniff), penyembunyian versi (`server_tokens off`), dan pemblokiran dotfiles (.git/.env).
 * 🐘 **PostgreSQL 13 Tuning Audit:** Mendeteksi parameter vanilla yang menghambat performa (misal: `random_page_cost = 4.0` pada media SSD, alokasi `shared_buffers`).
 * 🐍 **AST ORM Anti-Pattern Detector:** Menganalisis file Python modul kustom menggunakan AST untuk menemukan N+1 query (`search in loop`), unbatched `write()`, dan `len(search())`.
 * 📦 **Modular Configuration Bundles:** Menghasilkan file konfigurasi revisi optimal siap pakai (`odoo_optimized.conf`, `postgresql_optimized.conf`, `nginx_optimized.conf`, dll).
@@ -46,11 +47,12 @@ Didesain khusus dengan prinsip **Zero-Production-Impact**, alat ini memindai fil
                                      │
      ┌───────────────────────────────┼──────────────────────────────┐
      ▼                               ▼                              ▼
-[ 1. System & Conf ]       [ 2. Gateway Alignment ]       [ 3. AST Code Linter ]
-  • CPU/RAM vs Workers       • proxy_mode vs Headers        • search() in loop
-  • Memory limits            • Longpolling port 8072        • write() in loop
-  • PostgreSQL buffers/SSD   • Buffers 128k & Timeouts      • len(search())
+[ 1. System & Conf ]    [ 2. Gateway & Security ]     [ 3. AST Code Linter ]
+  • CPU/RAM vs Workers    • Longpolling port 8072       • search() in loop
+  • Memory limits         • DB Manager & Login Rate     • write() in loop
+  • PostgreSQL tuning     • Security Headers & Buffers  • len(search())
 ```
+
 
 ---
 

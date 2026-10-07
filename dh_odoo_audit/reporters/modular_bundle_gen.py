@@ -184,11 +184,14 @@ checkpoint_completion_target = 0.9
         with open(os.path.join(scope_dir, "audit_findings.md"), "w", encoding="utf-8") as f:
             f.write("\n".join(findings_md))
 
-        # 2. Optimized Nginx Config File
-        nginx_conf = """# ==============================================================================
+        # 2. Optimized Nginx Config File (Performance + Security Hardening)
+        nginx_conf = r"""# ==============================================================================
 # DH Odoo Audit Engine: REVISED & OPTIMIZED nginx.conf
-# Menyinkronkan port longpolling 8072, timeouts 300s, buffer 128k, dan SSL header
+# Gateway Alignment + Security Hardening (Port 8072, SSL, DB Protection, Rate Limiting)
 # ==============================================================================
+
+# Definisi Rate Limiting untuk Halaman Login (Anti-Brute Force)
+limit_req_zone $binary_remote_addr zone=odoo_login:10m rate=5r/m;
 
 upstream odoo_server {
     server 127.0.0.1:8069;
@@ -202,22 +205,75 @@ server {
     listen 80;
     server_name erp.yourdomain.com;
 
-    # Batas upload file attachment & Excel import
+    # 1. Information Disclosure Protection
+    server_tokens off;
+
+    # 2. HTTP Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Aktifkan HSTS jika sudah menggunakan sertifikat HTTPS:
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # 3. Batas upload file attachment & Excel import
     client_max_body_size 100M;
 
-    # Timeout simetris (mencegah error 504 pada transaksi laporan)
+    # 4. Timeout simetris (mencegah error 504 pada transaksi laporan)
     proxy_read_timeout 300s;
     proxy_connect_timeout 300s;
     proxy_send_timeout 300s;
 
-    # Buffer anti-502 untuk cookie sesi Odoo yang besar
+    # 5. Buffer anti-502 untuk cookie sesi Odoo yang besar
     proxy_buffer_size 128k;
     proxy_buffers 16 64k;
     proxy_busy_buffers_size 128k;
 
-    # Kompresi Gzip untuk bundle JS/CSS
+    # 6. Kompresi Gzip untuk bundle JS/CSS
     gzip on;
     gzip_types text/css application/javascript application/json text/xml image/svg+xml;
+
+    # --------------------------------------------------------------------------
+    # SECURITY RESTRICTIONS
+    # --------------------------------------------------------------------------
+
+    # Proteksi Database Manager (Hanya izinkan akses lokal / VPN admin)
+    location ~* /web/database/(manager|selector) {
+        allow 127.0.0.1;
+        allow 10.0.0.0/8;
+        allow 192.168.0.0/16;
+        deny all;
+
+        proxy_pass http://odoo_server;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Proteksi Anti-Brute Force pada Halaman Login
+    location = /web/login {
+        limit_req zone=odoo_login burst=10 nodelay;
+
+        proxy_pass http://odoo_server;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Blokir Akses ke File Tersembunyi (.git, .env, .htaccess)
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # --------------------------------------------------------------------------
+    # ROUTING & TRAFFIC DELIVERY
+    # --------------------------------------------------------------------------
 
     # 1. Routing Longpolling / Chat ke Port 8072 (Multiprocessing)
     location /longpolling {
@@ -250,6 +306,7 @@ server {
 """
         with open(os.path.join(scope_dir, "nginx_optimized.conf"), "w", encoding="utf-8") as f:
             f.write(nginx_conf)
+
 
     @classmethod
     def _generate_os_infra_scope(cls, report: AuditReport, base_dir: str):
