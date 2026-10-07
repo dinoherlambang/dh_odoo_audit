@@ -5,15 +5,74 @@
 [![Impact: Zero-Production-Impact](https://img.shields.io/badge/impact-zero--production--impact-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**DH Odoo Audit Engine (OPCAE)** adalah alat audit otomatis untuk infrastruktur, gateway reverse proxy, konfigurasi server, dan analisis kode statis Python (AST) modul kustom Odoo 13.
+**DH Odoo Audit Engine (OPCAE)** adalah mesin audit dan diagnostik otomatis untuk infrastruktur, gateway reverse proxy, konfigurasi database, serta analisis kode statis Python (AST) modul kustom Odoo 13.
 
-Didesain khusus dengan prinsip **Zero-Production-Impact**, alat ini memindai file konfigurasi lokal dan kode sumber tanpa perlu menguji atau membebani runtime Odoo maupun membuka koneksi aktif ke database produksi saat audit default.
+> 💡 **Lebih dari Sekadar Rekomendasi Konfigurasi:**  
+> Alat ini dirancang tidak hanya untuk menghasilkan cetak biru (*blueprint*) konfigurasi Odoo yang optimal, melainkan **mendiagnosis secara presisi akar masalah (*root cause analysis*) di balik tingginya latensi transaksi, bottleneck komputasi, lonjakan utilisasi CPU, konsumsi memori berlebih, hingga fenomena *worker starvation*.**
 
 ---
 
+## 🎯 Nilai Tambah: Diagnostik Presisi Bottleneck & Degradasi Performa Sistem ERP
+
+Banyak organisasi berasumsi bahwa kendala latensi tinggi dan ketidakresponsifan Odoo dapat diselesaikan semata-mata dengan melakukan *vertical scaling* (menambah alokasi vCPU dan RAM). Namun pada praktiknya, **sebagian besar degradasi performa bermula dari inefisiensi arsitektur kode dan miskonfigurasi konkurensi**. 
+
+Engine ini bertindak sebagai alat inspeksi mendalam untuk mengidentifikasi dan memetakan faktor-faktor determinan tersebut:
+
+```
+                  ┌─────────────────────────────────────────────────────────┐
+                  │    FAKTOR DETERMINAN BOTTLENECK & DEGRADASI PERFORMA    │
+                  └────────────────────────────┬────────────────────────────┘
+                                               │
+     ┌──────────────────────┬──────────────────┴────────────────┬──────────────────────┐
+     ▼                      ▼                                   ▼                      ▼
+[ Algoritma ORM & N+1 ] [ Row-Locking & Recompute ]   [ Concurrency Starvation ] [ Gateway Bottleneck ]
+Eksplosi round-trip     Eskalasi lock database &      Thread blocking pada mode  Exhaustion worker pool
+query di dalam iterasi  kaskade evaluasi komputasi    single-process & cron race akibat mixed traffic
+```
+
+### 1. 🔍 Diagnostik Lapisan Logika ORM (AST Static Code Inspection)
+* **Skrip Eksekutor:** [`dh_odoo_audit/checkers/ast_code.py`](./dh_odoo_audit/checkers/ast_code.py) (Kelas: `ASTCodeChecker`, `OdooASTVisitor`)
+* **Eksplosi Query N+1:** Mendeteksi pemanggilan `.search()` atau `.browse()` di dalam blok iterasi `for` yang melipatgandakan beban round-trip query ke PostgreSQL secara eksponensial untuk satu aksi transaksi.
+* **Eskalasi Row-Lock & Kaskade Komputasi Ulang:** Mengidentifikasi pemanggilan mutasi data (`.write()` / `.create()`) yang tidak menerapkan pola batching, memicu penguncian baris (*row lock*) beruntun dan evaluasi ulang *compute fields* yang tidak perlu.
+* **Inefisiensi Alokasi Memori Recordset:** Menemukan anti-pattern `len(search())` yang memaksa pemuatan seluruh recordset ke memori Python hanya untuk mengevaluasi eksistensi atau kuantitas data alih-alih memanfaatkan `search_count()`.
+
+### 2. ⚡ Diagnostik Manajemen Konkurensi & Worker Starvation
+* **Skrip Eksekutor:** [`dh_odoo_audit/checkers/hardware_conf.py`](./dh_odoo_audit/checkers/hardware_conf.py) (Kelas: `HardwareConfChecker`)
+* **Thread Blocking pada Single-Process Mode (`workers = 0`):** Mengidentifikasi instans Odoo yang berjalan tanpa multiprosesing gevent, di mana satu request komputasi intensif (misal export data atau kalkulasi laporan) akan **memblokir antrean request pengguna lain secara menyeluruh**.
+* **Kontensi Sumber Daya Antara Worker HTTP & Scheduled Actions:** Memvalidasi rasio `max_cron_threads` terhadap kapasitas CPU agar proses latar belakang (*background jobs*) tidak memonopoli siklus CPU pengguna interaktif.
+* **Allokasi Memori Tanpa Batas (*Unbounded Memory Bloat*):** Mendeteksi ketiadaan batas memori soft/hard yang berpotensi memicu terminasi paksa proses oleh Linux *OOM-Killer*.
+
+### 3. 🌐 Diagnostik Web Gateway & Penanganan Trafik Reverse Proxy
+* **Skrip Eksekutor:** [`dh_odoo_audit/checkers/gateway_proxy.py`](./dh_odoo_audit/checkers/gateway_proxy.py) (Kelas: `GatewayProxyChecker`)
+* **Saturasi Worker Akibat Mixed Longpolling Traffic:** Memverifikasi ketiadaan isolasi port asinkron `8072`, yang menyebabkan trafik polling chat dan notifikasi real-time menyerap alokasi worker transaksi HTTP reguler (8069).
+* **Asimetri Ambang Batas Timeout:** Mengidentifikasi ketidaksinkronan batas waktu respons antara Nginx dan Odoo yang memicu false *504 Gateway Timeout* sebelum transaksi selesai diproses.
+* **Proteksi Akses Sensitif & Rate Limiting:** Memeriksa blokade endpoint kritis `/web/database/manager` dan rate-limiting `/web/login`.
+
+### 4. 🐘 Diagnostik I/O Subsistem Basis Data & Kernel Paging
+* **Skrip Eksekutor:** [`dh_odoo_audit/checkers/hardware_conf.py`](./dh_odoo_audit/checkers/hardware_conf.py) & [`dh_odoo_audit/checkers/os_infra.py`](./dh_odoo_audit/checkers/os_infra.py) (Kelas: `OSInfraChecker`)
+* **Sub-Optimal Query Planner Heuristics:** Mengidentifikasi parameter `random_page_cost = 4.0` (default era HDD) yang menghalangi perencana query PostgreSQL memanfaatkan indeks secara optimal pada media penyimpanan modern berbasis NVMe/SSD.
+* **Penurunan Throughput Akibat Agresivitas Kernel Swapping:** Memeriksa nilai `vm.swappiness` pada level OS untuk mencegah kernel Linux memindahkan segmen memori aktif ERP ke partisi swap.
+
+---
+
+### 🗺️ Matriks Pemetaan Fitur Diagnostik ke Modul Script
+
+| Domain Diagnostik | Skrip / Modul Sumber | Kelas Utama | Fokus Analisis & Mitigasi Risiko |
+| :--- | :--- | :--- | :--- |
+| **Logika Kode ORM** | [`ast_code.py`](./dh_odoo_audit/checkers/ast_code.py) | `ASTCodeChecker` | Mencegah N+1 query, locking cascade, dan memory recordset bloat. |
+| **Worker & Konkurensi** | [`hardware_conf.py`](./dh_odoo_audit/checkers/hardware_conf.py) | `HardwareConfChecker` | Mencegah thread blocking, CPU contention, dan OOM-kill. |
+| **Web Gateway & Nginx** | [`gateway_proxy.py`](./dh_odoo_audit/checkers/gateway_proxy.py) | `GatewayProxyChecker` | Mencegah chat hijacking di HTTP pool, 502/504 error, dan celah brute force. |
+| **Basis Data & OS** | [`os_infra.py`](./dh_odoo_audit/checkers/os_infra.py) | `OSInfraChecker` | Mencegah full table scan I/O bottleneck dan latency disk swap. |
+| **Scoring & Grading** | [`scoring.py`](./dh_odoo_audit/core/scoring.py) | `calculate_health_score` | Menghitung indeks kesehatan sistem secara kuantitatif (0–100). |
+| **Konfigurasi Optimal**| [`modular_bundle_gen.py`](./dh_odoo_audit/reporters/modular_bundle_gen.py) | `ModularBundleGenerator`| Meracik file revisi siap deploy per-scope (`.conf`). |
+
+
 ## 📑 Daftar Isi
 
+- [Nilai Tambah: Diagnostik Presisi Bottleneck & Degradasi Performa Sistem ERP](#-nilai-tambah-diagnostik-presisi-bottleneck--degradasi-performa-sistem-erp)
+- [Matriks Pemetaan Fitur Diagnostik ke Modul Script](#️-matriks-pemetaan-fitur-diagnostik-ke-modul-script)
 - [Fitur Utama](#-fitur-utama)
+
 - [Arsitektur & Scope Audit](#-arsitektur--scope-audit)
 - [Struktur Output & Rekomendasi Optimal](#-struktur-output--rekomendasi-optimal)
 - [Instalasi & Penggunaan Cepat](#-instalasi--penggunaan-cepat)
@@ -22,6 +81,7 @@ Didesain khusus dengan prinsip **Zero-Production-Impact**, alat ini memindai fil
 - [Fitur AI Prompt Generator](#-fitur-ai-prompt-generator)
 - [Mengabaikan Aturan AST (`audit:ignore`)](#-mengabaikan-aturan-ast-auditignore)
 - [Lisensi](#-lisensi)
+
 
 ---
 
