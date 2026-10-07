@@ -9,7 +9,7 @@ Tugas Anda adalah menganalisis akar masalah secara komprehensif, memberikan konf
 - **Proyek:** Odoo Production Audit
 - **Target Odoo Version:** 13.0
 - **Audit Health Score:** 0 / 100 (Grade: D - CRITICAL RISK)
-- **Statistik Masalah:** 6 Critical, 12 Warning
+- **Statistik Masalah:** 6 Critical, 13 Warning
 
 ## 2. SERVER & GATEWAY CONFIGURATION MISMATCHES
 - **[CONF-WORKERS-ZERO] Odoo Berjalan dalam Single-Process Mode** (CRITICAL)
@@ -70,7 +70,16 @@ Tugas Anda adalah menganalisis akar masalah secara komprehensif, memberikan konf
   - Catatan: Nginx membocorkan nomor versinya pada header HTTP 'Server' dan halaman error default. Hal ini mempermudah penyerang menargetkan CVE spesifik.
 
 ## 3. STATIC CODE (AST) PERFORMANCE ISSUES
-### [Issue 1: AST-SEARCH-IN-LOOP - N+1 Query: Method .search() di dalam Loop for]
+### [Issue 1: AST-COMPUTE-NO-STORE - Computed Field Tanpa Flag store=True]
+- **File:** `./sample_addons\custom_sale\models\sale_order.py` (Line: 7)
+- **Severity:** `WARNING`
+- **Penyebab:** Field dengan compute method tidak menyertakan store=True. Field akan dihitung ulang secara dinamis setiap kali diakses (berisiko degradasi jika ada di tree/list view).
+- **Potongan Baris Kode Asli:**
+```python
+commission_total = fields.Float(string="Total Commission", compute="_compute_commission")
+```
+
+### [Issue 2: AST-SEARCH-IN-LOOP - N+1 Query: Method .search() di dalam Loop for]
 - **File:** `./sample_addons\custom_sale\models\sale_order.py` (Line: 12)
 - **Severity:** `CRITICAL`
 - **Penyebab:** Pemanggilan .search() di dalam perulangan for memicu ratusan round-trip query ke PostgreSQL.
@@ -79,7 +88,7 @@ Tugas Anda adalah menganalisis akar masalah secara komprehensif, memberikan konf
 comms = self.env['sale.commission'].search([('partner_id', '=', order.user_id.partner_id.id)])
 ```
 
-### [Issue 2: AST-LEN-SEARCH - Anti-Pattern len(search()) Terdeteksi]
+### [Issue 3: AST-LEN-SEARCH - Anti-Pattern len(search()) Terdeteksi]
 - **File:** `./sample_addons\custom_sale\models\sale_order.py` (Line: 19)
 - **Severity:** `WARNING`
 - **Penyebab:** Menggunakan len() pada search() menarik seluruh recordset ke memori Python hanya untuk menghitung jumlah.
@@ -88,7 +97,7 @@ comms = self.env['sale.commission'].search([('partner_id', '=', order.user_id.pa
 if len(self.env['sale.order'].search([('state', '=', 'draft')])) > 0:
 ```
 
-### [Issue 3: AST-WRITE-IN-LOOP - Unbatched Database Write: .write() di dalam Loop for]
+### [Issue 4: AST-WRITE-IN-LOOP - Unbatched Database Write: .write() di dalam Loop for]
 - **File:** `./sample_addons\custom_sale\models\sale_order.py` (Line: 22)
 - **Severity:** `CRITICAL`
 - **Penyebab:** Memanggil .write() pada setiap iterasi memicu evaluasi recompute dan row-lock berulang kali.

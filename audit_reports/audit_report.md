@@ -1,5 +1,5 @@
 # 🛡️ DH Odoo Performance & Code Audit Engine (OPCAE) Report
-**Proyek:** Odoo Production Audit | **Target:** Odoo 13.0 | **Tanggal:** 2026-10-07 20:42:05
+**Proyek:** Odoo Production Audit | **Target:** Odoo 13.0 | **Tanggal:** 2026-10-07 20:51:22
 
 ---
 
@@ -7,7 +7,7 @@
 
 | Health Score | Grade | Status | Total Checks | Critical | Warning | Info | Passed |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **0 / 100** | **Grade D** | 🔴 **CRITICAL RISK** | 23 | 6 | 12 | 5 | 0 |
+| **0 / 100** | **Grade D** | 🔴 **CRITICAL RISK** | 26 | 6 | 13 | 7 | 0 |
 
 ## 2. Server & Database Configuration Audit
 
@@ -37,6 +37,16 @@
 | `GATEWAY-SEC-DOTFILES-OPEN` | 🟡 **INFO** | **Akses File Tersembunyi (.git, .env) Belum Diblokir**<br>Nginx belum secara eksplisit memblokir request ke file atau direktori tersembunyi berawalan titik (seperti .git, .env, .htaccess). | Tambahkan blok: 'location ~ /\. { deny all; access_log off; log_not_found off; }'. |
 
 ## 4. Static Code Analysis (Custom Addons)
+
+### [AST-COMPUTE-NO-STORE] Computed Field Tanpa Flag store=True
+- **Severity:** 🟡 `WARNING`
+- **File:** `./sample_addons\custom_sale\models\sale_order.py` (Line 7)
+- **Penjelasan:** Field dengan compute method tidak menyertakan store=True. Field akan dihitung ulang secara dinamis setiap kali diakses (berisiko degradasi jika ada di tree/list view).
+- **Potongan Kode:**
+```python
+commission_total = fields.Float(string="Total Commission", compute="_compute_commission")
+```
+- **Saran Solusi:** Pertimbangkan menambahkan 'store=True' jika nilai field sering dibaca atau tampil di list/tree view.
 
 ### [AST-SEARCH-IN-LOOP] N+1 Query: Method .search() di dalam Loop for
 - **Severity:** 🔴 `CRITICAL`
@@ -71,4 +81,4 @@ order.write({'state': 'confirmed'})
 ## 5. OS & Infrastructure Audit
 
 - ℹ️ **Pemeriksaan Swappiness Dilewati:** /proc/sys/vm/swappiness tidak tersedia (Lingkungan Windows/Container). *(Rekomendasi: Informational)*
-- 🟡 **Kapasitas Sisa Storage Mendekati Batas:** Sisa storage tersisa 16.2% (76.9 GB). *(Rekomendasi: Sisa > 20%)*
+- 🟡 **Kapasitas Sisa Storage Mendekati Batas:** Sisa storage tersisa 16.2% (76.8 GB). *(Rekomendasi: Sisa > 20%)*

@@ -1,12 +1,12 @@
 {
   "project_name": "Odoo Production Audit",
   "odoo_version": "13.0",
-  "timestamp": "2026-10-07 20:42:05",
+  "timestamp": "2026-10-07 20:51:22",
   "summary": {
-    "total_checks": 23,
+    "total_checks": 26,
     "passed": 0,
-    "info_count": 5,
-    "warning_count": 12,
+    "info_count": 7,
+    "warning_count": 13,
     "critical_count": 6,
     "health_score": 0,
     "grade": "D",
@@ -270,7 +270,7 @@
       "code": "INFRA-DISK-WARN",
       "title": "Kapasitas Sisa Storage Mendekati Batas",
       "severity": "WARNING",
-      "description": "Sisa storage tersisa 16.2% (76.9 GB).",
+      "description": "Sisa storage tersisa 16.2% (76.8 GB).",
       "current_value": "16.2% Free",
       "target_value": "Sisa > 20%",
       "file_path": null,
@@ -278,6 +278,20 @@
       "snippet_before": null,
       "snippet_after": null,
       "recommendation": null
+    },
+    {
+      "scope": "static_code_analysis",
+      "code": "AST-COMPUTE-NO-STORE",
+      "title": "Computed Field Tanpa Flag store=True",
+      "severity": "WARNING",
+      "description": "Field dengan compute method tidak menyertakan store=True. Field akan dihitung ulang secara dinamis setiap kali diakses (berisiko degradasi jika ada di tree/list view).",
+      "current_value": "store=False (default)",
+      "target_value": "store=True (atau review pemakaian di view)",
+      "file_path": "./sample_addons\\custom_sale\\models\\sale_order.py",
+      "line_number": 7,
+      "snippet_before": "commission_total = fields.Float(string=\"Total Commission\", compute=\"_compute_commission\")",
+      "snippet_after": null,
+      "recommendation": "Pertimbangkan menambahkan 'store=True' jika nilai field sering dibaca atau tampil di list/tree view."
     },
     {
       "scope": "static_code_analysis",
@@ -295,6 +309,20 @@
     },
     {
       "scope": "static_code_analysis",
+      "code": "AST-UNLIMITED-SEARCH",
+      "title": "Pemanggilan .search() Tanpa Pembatas 'limit'",
+      "severity": "INFO",
+      "description": "Pencarian ORM tanpa parameter limit. Berisiko Out-Of-Memory jika tabel memiliki ratusan ribu baris data transaksi.",
+      "current_value": "search(...) without limit",
+      "target_value": "search(..., limit=...)",
+      "file_path": "./sample_addons\\custom_sale\\models\\sale_order.py",
+      "line_number": 16,
+      "snippet_before": "orders = self.env['sale.order'].search([('state', '=', 'draft')])",
+      "snippet_after": null,
+      "recommendation": "Sertakan keyword parameter 'limit=...' jika hanya membutuhkan sebagian data atau untuk mencegah konsumsi memori tak terkendali."
+    },
+    {
+      "scope": "static_code_analysis",
       "code": "AST-LEN-SEARCH",
       "title": "Anti-Pattern len(search()) Terdeteksi",
       "severity": "WARNING",
@@ -306,6 +334,20 @@
       "snippet_before": "if len(self.env['sale.order'].search([('state', '=', 'draft')])) > 0:",
       "snippet_after": "if self.env['sale.order'].search_count([('state', '=', 'draft')])) > 0:",
       "recommendation": "Gunakan method search_count() untuk menghitung jumlah baris langsung di PostgreSQL."
+    },
+    {
+      "scope": "static_code_analysis",
+      "code": "AST-UNLIMITED-SEARCH",
+      "title": "Pemanggilan .search() Tanpa Pembatas 'limit'",
+      "severity": "INFO",
+      "description": "Pencarian ORM tanpa parameter limit. Berisiko Out-Of-Memory jika tabel memiliki ratusan ribu baris data transaksi.",
+      "current_value": "search(...) without limit",
+      "target_value": "search(..., limit=...)",
+      "file_path": "./sample_addons\\custom_sale\\models\\sale_order.py",
+      "line_number": 19,
+      "snippet_before": "if len(self.env['sale.order'].search([('state', '=', 'draft')])) > 0:",
+      "snippet_after": null,
+      "recommendation": "Sertakan keyword parameter 'limit=...' jika hanya membutuhkan sebagian data atau untuk mencegah konsumsi memori tak terkendali."
     },
     {
       "scope": "static_code_analysis",

@@ -94,7 +94,67 @@ class OdooASTVisitor(ast.NodeVisitor):
                             recommendation=f"Gunakan batching: recordset.{node.func.attr}(...) di luar perulangan."
                         ))
 
+        # 5. Detect search([]) without limit
+        if self.active_rules.get("detect_unlimited_search", True):
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "search":
+                if not self.loop_stack:  # Avoid duplicate noise with search_in_loop
+                    has_limit = any(kw.arg == "limit" for kw in node.keywords)
+                    if not has_limit:
+                        if not self._is_ignored(node.lineno, "AST-UNLIMITED-SEARCH"):
+                            line_content = self.lines[node.lineno - 1].strip() if 1 <= node.lineno <= len(self.lines) else ""
+                            self.findings.append(Finding(
+                                scope="static_code_analysis",
+                                code="AST-UNLIMITED-SEARCH",
+                                title="Pemanggilan .search() Tanpa Pembatas 'limit'",
+                                severity=Severity.INFO,
+                                description="Pencarian ORM tanpa parameter limit. Berisiko Out-Of-Memory jika tabel memiliki ratusan ribu baris data transaksi.",
+                                file_path=self.file_path,
+                                line_number=node.lineno,
+                                current_value="search(...) without limit",
+                                target_value="search(..., limit=...)",
+                                snippet_before=line_content,
+                                recommendation="Sertakan keyword parameter 'limit=...' jika hanya membutuhkan sebagian data atau untuk mencegah konsumsi memori tak terkendali."
+                            ))
+
         self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign):
+        # 4. Detect computed field without store=True
+        if self.active_rules.get("detect_computed_without_store", True):
+            if isinstance(node.value, ast.Call):
+                func = node.value.func
+                is_odoo_field = False
+                if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "fields":
+                    is_odoo_field = True
+
+                if is_odoo_field:
+                    has_compute = False
+                    is_stored = False
+                    for kw in node.value.keywords:
+                        if kw.arg == "compute":
+                            has_compute = True
+                        elif kw.arg == "store":
+                            if hasattr(kw.value, "value") and kw.value.value is True:
+                                is_stored = True
+
+                    if has_compute and not is_stored:
+                        if not self._is_ignored(node.lineno, "AST-COMPUTE-NO-STORE"):
+                            line_content = self.lines[node.lineno - 1].strip() if 1 <= node.lineno <= len(self.lines) else ""
+                            self.findings.append(Finding(
+                                scope="static_code_analysis",
+                                code="AST-COMPUTE-NO-STORE",
+                                title="Computed Field Tanpa Flag store=True",
+                                severity=Severity.WARNING,
+                                description="Field dengan compute method tidak menyertakan store=True. Field akan dihitung ulang secara dinamis setiap kali diakses (berisiko degradasi jika ada di tree/list view).",
+                                file_path=self.file_path,
+                                line_number=node.lineno,
+                                current_value="store=False (default)",
+                                target_value="store=True (atau review pemakaian di view)",
+                                snippet_before=line_content,
+                                recommendation="Pertimbangkan menambahkan 'store=True' jika nilai field sering dibaca atau tampil di list/tree view."
+                            ))
+        self.generic_visit(node)
+
 
 
 class ASTCodeChecker(BaseChecker):

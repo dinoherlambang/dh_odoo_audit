@@ -1,7 +1,18 @@
 # 🛠️ Panduan Revisi Kode Modul Kustom (Before vs After)
 Panduan ini merangkum perbaikan baris kode untuk menghilangkan N+1 query dan bottleneck transaksi database.
 
-### Revisi Masalah #1: N+1 Query: Method .search() di dalam Loop for
+### Revisi Masalah #1: Computed Field Tanpa Flag store=True
+**Lokasi File:** `./sample_addons\custom_sale\models\sale_order.py` (Baris: 7)
+
+```python
+# ❌ SEBELUM (Kode Bermasalah):
+commission_total = fields.Float(string="Total Commission", compute="_compute_commission")
+
+# ✅ SESUDAH (Solusi Rekomendasi):
+# Pertimbangkan menambahkan 'store=True' jika nilai field sering dibaca atau tampil di list/tree view.
+```
+
+### Revisi Masalah #2: N+1 Query: Method .search() di dalam Loop for
 **Lokasi File:** `./sample_addons\custom_sale\models\sale_order.py` (Baris: 12)
 
 ```python
@@ -12,7 +23,7 @@ comms = self.env['sale.commission'].search([('partner_id', '=', order.user_id.pa
 # Kumpulkan ID terlebih dahulu lalu lakukan satu kali search dengan operator 'in' di luar loop.
 ```
 
-### Revisi Masalah #2: Anti-Pattern len(search()) Terdeteksi
+### Revisi Masalah #3: Anti-Pattern len(search()) Terdeteksi
 **Lokasi File:** `./sample_addons\custom_sale\models\sale_order.py` (Baris: 19)
 
 ```python
@@ -23,7 +34,7 @@ if len(self.env['sale.order'].search([('state', '=', 'draft')])) > 0:
 # Gunakan method search_count() untuk menghitung jumlah baris langsung di PostgreSQL.
 ```
 
-### Revisi Masalah #3: Unbatched Database Write: .write() di dalam Loop for
+### Revisi Masalah #4: Unbatched Database Write: .write() di dalam Loop for
 **Lokasi File:** `./sample_addons\custom_sale\models\sale_order.py` (Baris: 22)
 
 ```python
